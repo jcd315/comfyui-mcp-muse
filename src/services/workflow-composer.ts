@@ -41,7 +41,20 @@ interface InpaintParams extends Img2ImgParams {
   mask_path?: string;
 }
 
-type TemplateParams = Txt2ImgParams | Img2ImgParams | UpscaleParams | InpaintParams;
+interface LtxvI2VParams {
+  /** Motion/action prompt — describe what changes, not what's already visible */
+  positive_prompt?: string;
+  /** Negative prompt for video generation */
+  negative_prompt?: string;
+  /** Image filename in ComfyUI's input directory */
+  image_filename?: string;
+  /** Random seed for reproducibility */
+  seed?: number;
+  /** Path to a custom LTX I2V workflow JSON file (if not using built-in) */
+  workflow_file?: string;
+}
+
+type TemplateParams = Txt2ImgParams | Img2ImgParams | UpscaleParams | InpaintParams | LtxvI2VParams;
 
 // --- Templates ---
 
@@ -259,11 +272,83 @@ function buildInpaint(p: InpaintParams): WorkflowJSON {
   };
 }
 
+function buildLtxvI2V(p: LtxvI2VParams): WorkflowJSON {
+  const prompt = p.positive_prompt ?? "";
+  const negative = p.negative_prompt ?? "blurry, oversaturated, pixelated, low resolution, grainy, distorted, watermark, text";
+  const imageFilename = p.image_filename ?? "input.png";
+  const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
+
+  // LTX I2V workflows are complex (50+ nodes). Load from file if provided.
+  if (p.workflow_file) {
+    try {
+      const fs = require("node:fs");
+      const wf: WorkflowJSON = JSON.parse(fs.readFileSync(p.workflow_file, "utf-8"));
+
+      // Known node IDs for common LTX I2V workflows — apply overrides
+      const KNOWN_PROMPT_NODES = ["121", "6"]; // CLIPTextEncode (Positive)
+      const KNOWN_NEG_NODES = ["110", "7"];     // CLIPTextEncode (Negative)
+      const KNOWN_IMAGE_NODES = ["167"];         // LoadImage
+      const KNOWN_SEED_NODES = ["114", "115", "449"]; // RandomNoise nodes
+
+      for (const nodeId of KNOWN_PROMPT_NODES) {
+        if (wf[nodeId]?.class_type === "CLIPTextEncode" && wf[nodeId]._meta?.title?.includes("Positive")) {
+          wf[nodeId].inputs.text = prompt;
+        }
+      }
+      for (const nodeId of KNOWN_NEG_NODES) {
+        if (wf[nodeId]?.class_type === "CLIPTextEncode" && wf[nodeId]._meta?.title?.includes("Negative")) {
+          wf[nodeId].inputs.text = negative;
+        }
+      }
+      for (const nodeId of KNOWN_IMAGE_NODES) {
+        if (wf[nodeId]?.class_type === "LoadImage") {
+          wf[nodeId].inputs.image = imageFilename;
+        }
+      }
+      for (const nodeId of KNOWN_SEED_NODES) {
+        if (wf[nodeId]?.class_type === "RandomNoise") {
+          wf[nodeId].inputs.noise_seed = seed;
+        }
+      }
+
+      // Auto-remove the LTX2SamplingPreviewOverride node (known crash bug)
+      if (wf["463"]?.class_type === "LTX2SamplingPreviewOverride") {
+        // Rewire any nodes that reference 463 to point to 463's model input source
+        const sourceModel = wf["463"].inputs.model;
+        if (Array.isArray(sourceModel)) {
+          for (const [nid, node] of Object.entries(wf)) {
+            if (nid === "463") continue;
+            for (const [key, val] of Object.entries(node.inputs)) {
+              if (Array.isArray(val) && val.length === 2 && val[0] === "463") {
+                node.inputs[key] = [sourceModel[0], val[1]];
+              }
+            }
+          }
+        }
+        delete wf["463"];
+      }
+
+      return wf;
+    } catch (err) {
+      throw new ValidationError(
+        `Failed to load LTX I2V workflow from "${p.workflow_file}": ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  // Without a workflow file, return a minimal error — LTX workflows are too complex to build from scratch
+  throw new ValidationError(
+    'LTX I2V requires a workflow_file parameter pointing to an exported ComfyUI workflow JSON. ' +
+    'Export your working LTX I2V workflow from ComfyUI (Save > API Format) and provide the path.',
+  );
+}
+
 const TEMPLATES: Record<string, (params: Record<string, unknown>) => WorkflowJSON> = {
   txt2img: (p) => buildTxt2Img(p as Txt2ImgParams),
   img2img: (p) => buildImg2Img(p as Img2ImgParams),
   upscale: (p) => buildUpscale(p as UpscaleParams),
   inpaint: (p) => buildInpaint(p as InpaintParams),
+  ltxv_i2v: (p) => buildLtxvI2V(p as LtxvI2VParams),
 };
 
 export const TEMPLATE_NAMES = Object.keys(TEMPLATES);

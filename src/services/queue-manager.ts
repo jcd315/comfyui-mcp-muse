@@ -34,9 +34,30 @@ export async function getQueueSummary(): Promise<QueueSummary> {
 
 export async function getJobStatus(
   promptId: string,
-): Promise<{ running: boolean; pending: boolean; done: boolean }> {
+): Promise<{
+  running: boolean;
+  pending: boolean;
+  done: boolean;
+  completion?: import("./job-watcher.js").CompletionNotification;
+}> {
   const client = getClient();
-  return client.getPromptStatus(promptId);
+  const status = await client.getPromptStatus(promptId);
+
+  // If done, try to read the completion notification for output details
+  if (status.done) {
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { tmpdir } = await import("node:os");
+      const completionPath = join(tmpdir(), "comfyui-mcp-completions", `${promptId}.json`);
+      const data = await readFile(completionPath, "utf-8");
+      return { ...status, completion: JSON.parse(data) };
+    } catch {
+      // Completion file not found — that's ok, return status only
+    }
+  }
+
+  return status;
 }
 
 export async function cancelRunningJob(promptId?: string): Promise<void> {
