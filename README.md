@@ -1,14 +1,31 @@
-# comfyui-mcp
+# comfyui-mcp-muse
 
-**MCP server + Claude Code plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — execute workflows, generate images, visualize pipelines, manage models, control VRAM, and explore custom nodes, all from your AI coding assistant.
+**Enhanced MCP server + Claude Code plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — execute workflows, generate images and **videos**, visualize pipelines, manage models, control VRAM, and explore custom nodes, all from your AI coding assistant.
 
-[![npm version](https://img.shields.io/npm/v/comfyui-mcp)](https://www.npmjs.com/package/comfyui-mcp)
+> **Fork of [artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp)** with video workflow support, enhanced job tracking, and LTX Video templates.
+
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/npm/l/comfyui-mcp)](./LICENSE)
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**31 MCP tools** | **10 slash commands** | **4 knowledge skills** | **3 autonomous agents** | **3 hooks**
+**33+ MCP tools** | **10 slash commands** | **12 knowledge skills** | **3 autonomous agents** | **3 hooks**
+
+---
+
+## What's Different From Upstream
+
+This fork adds **video-first capabilities** to the original comfyui-mcp:
+
+| Feature | Upstream | This Fork |
+|---------|----------|-----------|
+| **Video output detection** | Images only | SaveVideo, CreateVideo, VHS_VideoCombine |
+| **Job completion details** | Boolean (running/done) | Full CompletionNotification with outputs, errors, duration |
+| **LTX I2V template** | No | `create_workflow("ltxv_i2v", {...})` — auto-patches prompt/image/seed |
+| **Crash node bypass** | No | Auto-removes LTX2SamplingPreviewOverride (known NoneType crash) |
+| **Video in job status** | No | `get_job_status` returns `video_outputs[]` alongside `outputs[]` |
+
+All upstream features (31 tools, 10 commands, skills, agents, hooks) are preserved.
 
 ---
 
@@ -16,14 +33,23 @@ Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI instal
 
 **1. Install ComfyUI** (if you haven't already): [ComfyUI Desktop](https://www.comfy.org/download) or [from source](https://github.com/comfyanonymous/ComfyUI)
 
-**2. Add the MCP server** to your Claude Code config (`~/.claude/settings.json`):
+**2. Clone and build this fork:**
+
+```bash
+git clone https://github.com/jcd315/comfyui-mcp-muse.git
+cd comfyui-mcp-muse
+npm install
+npm run build
+```
+
+**3. Add the MCP server** to your Claude Code config (`~/.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "comfyui": {
-      "command": "npx",
-      "args": ["-y", "comfyui-mcp"],
+      "command": "node",
+      "args": ["/path/to/comfyui-mcp-muse/dist/index.js"],
       "env": {
         "CIVITAI_API_TOKEN": ""
       }
@@ -32,15 +58,14 @@ Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI instal
 }
 ```
 
-**3. Start using it.** With ComfyUI running, ask Claude to generate an image:
+**4. Start using it.** With ComfyUI running, ask Claude to generate an image or video:
 
 ```
 > Generate an image of a sunset over mountains
+> Generate a video from this image using my LTX workflow
 ```
 
-Claude will find (or download) a checkpoint, build a workflow, execute it, and return the image.
-
-> **Note**: This runs as a standalone MCP server — no need to clone this repo. `npx` will download and run it automatically.
+Claude will build a workflow, execute it, and return the result — including video outputs.
 
 ---
 
@@ -77,6 +102,14 @@ claude plugin install comfyui-mcp
 | **prompt-engineering** | CLIP weight syntax `(word:1.3)`, BREAK tokens, embeddings, model-specific prompting for SD1.5/SDXL/Flux/SD3 |
 | **troubleshooting** | Common error catalog — OOM, dtype mismatches, missing nodes, NaN tensors, black images, CUDA errors, with VRAM estimates per model |
 | **model-compatibility** | Compatibility matrix — loaders, resolutions, CFG, samplers, ControlNets, LoRAs, and VAEs per model family (SD1.5/SDXL/Turbo/Lightning/Flux/SD3/LTXV) |
+| **ltxv2-video** | LTX-V2 19B video generation — T2V, I2V, camera control LoRAs, 2-stage upscaling |
+| **wan-t2v-video** | WAN 2.2 text-to-video — 14B MoE, dual Hi-Lo architecture, Lightning LoRAs |
+| **wan-flf-video** | WAN 2.2 first-last-frame I2V — interpolation between start/end frames |
+| **z-image-txt2img** | Z-Image turbo models for fast image generation |
+| **flux-txt2img** | Flux text-to-image generation |
+| **qwen-image-edit** | Qwen image-to-image editing and transformation |
+| **qwen-txt2img** | Qwen text-to-image generation |
+| **director** | Multi-scene video production pipeline — story to final film |
 
 ### Agents
 
@@ -111,7 +144,7 @@ claude plugin install comfyui-mcp
 | Tool | Description |
 |------|-------------|
 | `enqueue_workflow` | Submit a workflow (API format JSON) — returns `prompt_id` immediately, non-blocking |
-| `get_job_status` | Check execution status of a job by prompt ID |
+| `get_job_status` | Check execution status of a job by prompt ID — returns full completion details (image outputs, video outputs, errors, duration) when done |
 | `get_queue` | View the current execution queue (running + pending) |
 | `cancel_job` | Interrupt the currently running job |
 | `get_system_stats` | Get system info — GPU, VRAM, Python version, OS |
@@ -127,7 +160,7 @@ claude plugin install comfyui-mcp
 
 | Tool | Description |
 |------|-------------|
-| `create_workflow` | Generate a workflow from templates: `txt2img`, `img2img`, `upscale`, `inpaint` |
+| `create_workflow` | Generate a workflow from templates: `txt2img`, `img2img`, `upscale`, `inpaint`, `ltxv_i2v` |
 | `modify_workflow` | Apply operations: `set_input`, `add_node`, `remove_node`, `connect`, `insert_between` |
 | `get_node_info` | Query available node types from ComfyUI's `/object_info` endpoint |
 
@@ -224,6 +257,23 @@ Claude will:
 2. Build a txt2img workflow with your prompt
 3. Execute it on ComfyUI
 4. Return the generated image
+
+### Generate a video from an image (I2V)
+
+```
+> Upload this image to ComfyUI, then create an LTX I2V workflow with the prompt 
+> "She turns slowly and walks away from the window" and run it
+```
+
+Claude will:
+1. Upload the image to ComfyUI's input directory
+2. Create an LTX I2V workflow from your exported template
+3. Patch the prompt, image filename, and seed
+4. Auto-remove known crash-prone nodes
+5. Enqueue the workflow and track completion
+6. Report the output video file
+
+The `ltxv_i2v` template requires a `workflow_file` parameter pointing to your exported LTX I2V workflow JSON from ComfyUI.
 
 ### Visualize a workflow
 
@@ -428,8 +478,8 @@ All communication with the MCP client (Claude Code) happens over **stdio** using
 ### Setup
 
 ```bash
-git clone https://github.com/artokun/comfyui-mcp.git
-cd comfyui-mcp
+git clone https://github.com/jcd315/comfyui-mcp-muse.git
+cd comfyui-mcp-muse
 npm install
 ```
 
@@ -582,6 +632,16 @@ Use `/comfy:install <pack>` to install missing node packs from the registry. The
 4. Submit a pull request
 
 ---
+
+## Upstream
+
+This is a fork of [artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp) by Arthur Longbottom. All upstream features are preserved. To sync with upstream:
+
+```bash
+git remote add upstream https://github.com/artokun/comfyui-mcp.git
+git fetch upstream
+git merge upstream/main
+```
 
 ## License
 
