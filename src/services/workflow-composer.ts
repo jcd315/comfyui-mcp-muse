@@ -761,7 +761,7 @@ function buildLtx23(p: Ltx23Params): WorkflowJSON {
 }
 
 function buildLtx23_3Pass(p: Ltx23_3PassParams): WorkflowJSON {
-  const wf = loadWorkflowFile("ltx23_3pass.json");
+  const wf = loadWorkflowFile("ltx23_distill_3stage.json");
   const prompt = p.positive_prompt ?? "";
   const negative = p.negative_prompt ?? "blurry, oversaturated, pixelated, low resolution, grainy, distorted, noise, compression artifacts, jpeg artifacts, glitches, watermark, text, logo, signature, copyright, subtitles, distorted sound, saturated sound, loud";
   const t2v = p.text_to_video ?? false;
@@ -854,7 +854,7 @@ const TEMPLATES: Record<string, (params: Record<string, unknown>) => WorkflowJSO
   ltx23_i2v: (p) => buildLtx23I2V(p as Ltx23I2VParams),
   ltx23_t2v: (p) => buildLtx23T2V(p as Ltx23T2VParams),
   ltx23: (p) => buildLtx23(p as Ltx23Params),
-  ltx23_3pass: (p) => buildLtx23_3Pass(p as Ltx23_3PassParams),
+  ltx23_distill_3stage: (p) => buildLtx23_3Pass(p as Ltx23_3PassParams),
   generate_image: (p) => buildFromConfig(GENERATE_IMAGE_CONFIG, p as ImageWorkflowParams),
   qwen_rapid_image: (p) => buildFromConfig(QWEN_RAPID_IMAGE_CONFIG, p as ImageWorkflowParams),
   flux2_klein: (p) => buildFromConfig(FLUX2_KLEIN_CONFIG, p as ImageWorkflowParams),
