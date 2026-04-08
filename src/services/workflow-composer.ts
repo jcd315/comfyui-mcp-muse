@@ -123,9 +123,9 @@ interface Ltx23_3PassParams {
   text_to_video?: boolean;
   /** Absolute file path to starting image (only used when text_to_video is false) */
   image_path?: string;
-  /** Output width in pixels */
+  /** Input width for resolution formula (default 2560 → 1280x720 or 1920x1152 output) */
   width?: number;
-  /** Output height in pixels */
+  /** Input height for resolution formula (default 1408 for 720p, 1536 for 1080p — auto-selected by skip_pass3) */
   height?: number;
   /** Video duration in seconds */
   duration?: number;
@@ -767,11 +767,15 @@ function buildLtx23_3Pass(p: Ltx23_3PassParams): WorkflowJSON {
   const t2v = p.text_to_video ?? false;
   const imagePath = p.image_path ?? "";
   const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
-  const width = p.width ?? 1920;
-  const height = p.height ?? 1088;
+  const skipPass3 = p.skip_pass3 ?? false;
+  // Resolution defaults account for the internal formula: (W//4//32)*32
+  // Pass 1 latent is divided by 4 and rounded to 32, then upscaled 2x (Pass 2) + 1.5x (Pass 3)
+  // 720p (skip_pass3): W=2560→latent 640, H=1408→latent 352, after 2x = 1280x704
+  // 1080p (full 3-pass): W=2560→latent 640, H=1536→latent 384, after 2x+1.5x = 1920x1152
+  const width = p.width ?? 2560;
+  const height = p.height ?? (skipPass3 ? 1408 : 1536);
   const duration = p.duration ?? 10;
   const lora = p.lora ?? "None";
-  const skipPass3 = p.skip_pass3 ?? false;
 
   // Prompt
   wf["98"].inputs.text = prompt;
